@@ -14,7 +14,6 @@
         </CustomTag>
         <CustomTag>
           <option name="color" value="#474747" />
-          <option name="hasStrikethrough" value="true" />
           <option name="type" value="//" />
         </CustomTag>
         <CustomTag>
@@ -24,6 +23,12 @@
         <CustomTag>
           <option name="color" value="#98C379" />
           <option name="type" value="*" />
+        </CustomTag>
+        <CustomTag>
+          <option name="backgroundColor" value="#999900" />
+          <option name="bold" value="true" />
+          <option name="color" value="#FF9999" />
+          <option name="type" value="NOTE" />
         </CustomTag>
       </list>
     </option>

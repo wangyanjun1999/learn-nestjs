@@ -1,7 +1,20 @@
-import {Controller, Get, Param, NotFoundException, Post,Body,Query} from '@nestjs/common';
-import { postsDb } from './posts.service';
+import {
+    Controller,
+    Get,
+    Param,
+    NotFoundException,
+    Post,
+    Body,
+    Query,
+    Patch,
+    Put,
+    Delete, HttpCode, HttpStatus
+} from '@nestjs/common';
+// import { PostsService } from './posts.service'; // 引入模拟数据库
+import { postsDb } from './posts.service'; // 引入模拟数据库
 import { PostSchma } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
+import {UpdatePostDto} from "./dto/update-post.dto";
 /*
 * 控制器是 NestJS 中用 @Controller() 装饰器标记的类，负责接收特定路径的 HTTP 请求并返回响应。
 *
@@ -14,6 +27,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 * */
 @Controller('posts')
 export class PostsController {
+    // constructor(private readonly postsService: PostsService) {}
 
     // 1. 获取所有文章
     // @Get() // 映射到 GET /posts
@@ -105,6 +119,12 @@ findAllPosts(
     }
 
 
+    /*
+    * 把 @Query() 用在需要从路径中提取参数的地方。
+    * 例如，想处理 /posts/Alice 却用了 @Query('author')。
+    * 原因: @Query() 只处理 ? 后面的参数。
+    * 正确: 对于 /posts/Alice 应该用 @Get(':author') 和 @Param('author')。
+    * */
 
     // ============================
     // post
@@ -145,6 +165,123 @@ findAllPosts(
 
 
 
+
+    @Patch(':id') // 映射到 PATCH /posts/:id
+    updatePostPartial(
+        @Param('id') id: string,
+        // 设置默认值为 {}，以便在没有请求体时仍然能正常工作
+        @Body() updatePostDto : UpdatePostDto = {} // 使用 UpdatePostDto 来表示部分更新,
+    ): PostSchma {
+        /*
+        *  // ⚡ 挑战:
+  // 在 PATCH 方法中，如果 updatePostDto 是一个空对象 {} (客户端发送了一个空的 JSON body)，
+  // 现在的实现会如何表现？这是否是期望的行为？如果不期望，如何修改以至少返回原始文章或提示无需更新？
+}*/
+        if (Object.keys(updatePostDto).length === 0) {
+            // 如果 updatePostDto 是一个空对象，返回原始文章或提示无需更新
+            const postId = parseInt(id, 10);
+            const post = postsDb.find(p => p.id === postId);
+            if (!post) {
+                throw new NotFoundException(`Post with ID ${id} not found for update.`);
+            }
+            console.log('No updates provided, returning original post:', post);
+            return post;
+        }
+
+
+
+        console.log(`Partially updating post with id: ${id} with data:`, updatePostDto);
+        const postId = parseInt(id, 10);
+        const postIndex = postsDb.findIndex(p => p.id === postId);
+
+        if (postIndex === -1) {
+            throw new NotFoundException(`Post with ID ${id} not found for update.`);
+        }
+
+
+
+
+    // 在 PATCH 方法中，如果 updatePostDto 是一个空对象 {} (客户端发送了一个空的 JSON body)，
+    // 现在的实现会如何表现？这是否是期望的行为？如果不期望，如何修改以至少返回原始文章或提示无需更新？
+        // 将传入的 DTO 中的字段合并到现有文章对象上
+        // 只有 DTO 中存在的字段才会被更新
+        const updatedPost = { ...postsDb[postIndex], ...updatePostDto };
+        postsDb[postIndex] = updatedPost;
+
+        console.log('Post updated:', updatedPost);
+        return updatedPost;
+}
+
+
+
+    // ⚠️ 概念性 PUT 实现 (用于对比)
+    // 在实际项目中，PUT 的行为 (是否允许部分字段缺失以及如何处理) 需要仔细定义
+    @Put(':id') // 映射到 PUT /posts/:id
+    updatePostFull(
+        @Param('id') id: string,
+        @Body() updatePostDto: CreatePostDto, // 注意：这里使用 CreatePostDto 强调所有字段应提供
+        // 或者一个 UpdatePostDto，但逻辑需处理字段缺失的情况
+    ): PostSchma {
+        console.log(`Fully updating post with id: ${id} with data:`, updatePostDto);
+        const postId = parseInt(id, 10);
+        const postIndex = postsDb.findIndex(p => p.id === postId);
+
+        if (postIndex === -1) {
+            throw new NotFoundException(`Post with ID ${id} not found for full update.`);
+        }
+
+        // 对于 PUT，通常期望提供完整的资源表示
+        // 如果 updatePostDto 的某些字段是 undefined，它们也会覆盖掉原有值
+        const updatedPost: PostSchma = {
+            id: postId, // id 保持不变
+            title: updatePostDto.title,
+            content: updatePostDto.content,
+            author: updatePostDto.author,
+        };
+        postsDb[postIndex] = updatedPost;
+
+        console.log('Post fully updated/replaced:', updatedPost);
+        return updatedPost;
+    }
+
+
+
+    @Delete(':id') // 映射到 DELETE /posts/:id
+    @HttpCode(HttpStatus.NO_CONTENT) // ⚡ 推荐：成功删除后返回 204 No Content
+    removePost(@Param('id') id: string): void { // 返回 void 结合 @HttpCode(204) 是常见做法
+        console.log(`Attempting to delete post with id: ${id}`);
+        const postId = parseInt(id, 10);
+        const postIndex = postsDb.findIndex(p => p.id === postId);
+
+        if (postIndex === -1) {
+            throw  new NotFoundException(`Post with ID ${id} not found for deletion.`);
+            }
+
+            postsDb.splice(postIndex, 1); // 从数组中移除文章
+            console.log(`Post with id: ${id} deleted successfully.`);
+            // 当使用 @HttpCode(204) 时，此方法不需要显式 return
+            // 如果不设置 @HttpCode(204) 并返回 void，NestJS 默认也可能发 204 或 200 空响应
+            // 若想返回被删除的对象（不常见但可以）： return deletedPost; 并移除 @HttpCode(204)
+        }
+
+        // ⚡ 挑战:
+        // 如果一个作者有多篇文章，实现一个 `DELETE /posts/by-author/:authorName` 端点，
+        // 删除该作者的所有文章。你需要如何修改 `postsDb`？此操作应返回什么？
+        // (提示: 可能需要循环或 filter 创建新数组，并考虑返回被删除文章的数量或 ID 列表)
+        // @Delete('by-author/:authorName') // 映射到 DELETE /posts/by-author/:authorName
+        // @HttpCode(HttpStatus.NO_CONTENT) // 推荐：成功删除后返回 204 No Content
+        // removePostsByAuthor(@Param('authorName') authorName: string): void {
+        //     console.log(`Attempting to delete posts by author: ${authorName}`);
+        //     const initialLength = postsDb.length;
+        //     postsDb = postsDb.filter(post => post.author !== authorName); // 创建新数组，排除指定作者的文章
+        //     const deletedCount = initialLength - postsDb.length;
+        //
+        //     if (deletedCount === 0) {
+        //         throw new NotFoundException(`No posts found for author ${authorName} to delete.`);
+        //     }
+        //
+        //     console.log(`${deletedCount} posts by author ${authorName} deleted successfully.`);
+        // } 
 
 }
 
